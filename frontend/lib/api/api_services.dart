@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Since you are building for Web (Microsoft Edge), we use localhost!
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000';
 
   // The function is named 'fetchAnalysis'
   static Future<Map<String, dynamic>?> fetchAnalysis(String policyText) async {
