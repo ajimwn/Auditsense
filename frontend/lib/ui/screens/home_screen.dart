@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,7 +5,7 @@ import '../../data/models/audit_item.dart';
 import '../../data/services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  final ValueChanged<List<AuditItem>>? onAnalysisComplete;
+  final Function(List<AuditItem>, String)? onAnalysisComplete;
 
   const HomeScreen({super.key, this.onAnalysisComplete});
 
@@ -52,7 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.publicSans(fontWeight: FontWeight.w600)),
+        content: Text(
+          message,
+          style: GoogleFonts.publicSans(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: const Color(0xFFBC204B),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -66,32 +68,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() => _isLoading = true);
 
-    String textToAnalyze = "";
-    if (textInput.isNotEmpty) {
-      textToAnalyze = textInput;
-    } else {
-      List<String> contents = [];
-      for (var file in _selectedFiles) {
-        if (file.extension?.toLowerCase() == 'txt' && file.bytes != null) {
-          contents.add(utf8.decode(file.bytes!));
-        } else {
-          contents.add("Extracted content from ${file.name}: Mocked secure data processing for ISO review.");
-        }
-      }
-      textToAnalyze = contents.join("\n\n");
-    }
-
-    final List<AuditItem>? items = await ApiService.fetchAnalysis(textToAnalyze);
+    // Fixed: Pass actual file bytes to ApiService for clean backend extraction
+    final List<AuditItem>? items = await ApiService.fetchAnalysis(
+      textInput,
+      files: _selectedFiles,
+    );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (items != null) {
       if (widget.onAnalysisComplete != null) {
-        widget.onAnalysisComplete!(items);
+        // Use text input as originalText for history, or placeholder if files used
+        String logText = textInput.isNotEmpty
+            ? textInput
+            : "[Uploaded Documents: ${_selectedFiles.map((f) => f.name).join(', ')}]";
+        widget.onAnalysisComplete!(items, logText);
       }
     } else {
-      _showErrorSnackBar("Analysis Engine failed. Please verify system connectivity.");
+      _showErrorSnackBar(
+        "Analysis Engine failed. Please verify system connectivity.",
+      );
     }
   }
 
@@ -113,9 +110,11 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Text(
                   'Upload your policy documents or paste text to match them against ISO 27001 controls.',
-                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.secondary),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.secondary,
+                  ),
                 ),
-                SizedBox(height: isMobile ? 32 : 48),
+                const SizedBox(height: 32),
 
                 _buildUploadSection(theme, isMobile),
                 const SizedBox(height: 32),
@@ -126,20 +125,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: double.infinity,
                   height: 60,
                   child: ElevatedButton(
-                    onPressed: _isLoading || (_selectedFiles.isEmpty && _textController.text.isEmpty) ? null : _runAnalysis,
-                    child: _isLoading 
-                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.analytics_outlined),
-                            const SizedBox(width: 12),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text('START ANALYSIS'.toUpperCase(), style: const TextStyle(letterSpacing: 1.5)),
+                    onPressed:
+                        _isLoading ||
+                            (_selectedFiles.isEmpty &&
+                                _textController.text.isEmpty)
+                        ? null
+                        : _runAnalysis,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: Colors.white,
                             ),
-                          ],
-                        ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.analytics_outlined),
+                              const SizedBox(width: 12),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'START ANALYSIS'.toUpperCase(),
+                                  style: const TextStyle(letterSpacing: 1.5),
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ],
@@ -170,18 +184,28 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.upload_file_rounded, size: isMobile ? 32 : 48, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.upload_file_rounded,
+                  size: isMobile ? 32 : 48,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     'Drag and drop or click to upload files',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary, fontSize: isMobile ? 14 : 16),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontSize: isMobile ? 14 : 16,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('Supported: PDF, DOCX, TXT', style: theme.textTheme.bodySmall?.copyWith(fontSize: 11)),
+                Text(
+                  'Supported: PDF, DOCX, TXT',
+                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                ),
               ],
             ),
           ),
@@ -197,7 +221,10 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(4),
@@ -205,11 +232,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.insert_drive_file_outlined, size: 16, color: Color(0xFF00338D)),
+                    const Icon(
+                      Icons.insert_drive_file_outlined,
+                      size: 16,
+                      color: Color(0xFF00338D),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: Text(_selectedFiles[index].name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                    Expanded(
+                      child: Text(
+                        _selectedFiles[index].name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () => _removeFile(index),

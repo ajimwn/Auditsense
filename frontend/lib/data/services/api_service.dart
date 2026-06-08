@@ -7,38 +7,53 @@ import '../models/iso_standards.dart';
 class ApiService {
   static const String baseUrl = 'http://127.0.0.1:8000';
 
-  static Future<List<AuditItem>?> fetchAnalysis(String policyText) async {
+  /// Sends text or files to the backend for multi-clause analysis.
+  /// Fixed: No longer sends binary data as raw strings to avoid gibberish.
+  static Future<List<AuditItem>?> fetchAnalysis(String policyText, {List<dynamic>? files}) async {
     try {
-      debugPrint('Sending text to analysis engine...');
+      debugPrint('Initiating multi-clause Analysis Engine...');
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/analyze'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"text": policyText}),
-      );
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/analyze'));
+
+      if (files != null && files.isNotEmpty) {
+        // Handle actual file uploads for clean extraction
+        for (var file in files) {
+          if (file.bytes != null) {
+            request.files.add(http.MultipartFile.fromBytes(
+              'file',
+              file.bytes!,
+              filename: file.name,
+            ));
+          }
+        }
+      } else {
+        // Handle raw pasted text
+        request.fields['text'] = policyText;
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        final List<dynamic> resultsList = data.containsKey('results') ? data['results'] : [data];
-        
-        // Start with the full standard list
+        final List<dynamic> resultsList = jsonDecode(response.body);
         final List<AuditItem> fullList = ISOStandards.getAnnexA2022();
         
-        // Map detected items back to the full list
         for (var rawItem in resultsList) {
           final String matchedClause = rawItem['match'] ?? '';
           final int confidence = (rawItem['confidence'] as num?)?.toInt() ?? 0;
           
           final int index = fullList.indexWhere((item) => item.isoClause == matchedClause);
+          
           if (index != -1) {
-            fullList[index].policyText = policyText;
+            fullList[index].policyText = rawItem['evidence'] ?? '';
+            fullList[index].justification = rawItem['justification'] ?? '';
             fullList[index].confidence = confidence;
             fullList[index].isAutomatedMatch = true;
             
-            // Set initial status based on reasoning
-            if (confidence > 80) {
+            // Map statuses based on Semantic Mapper confidence
+            if (confidence >= 80) {
               fullList[index].status = 'Implemented';
-            } else if (confidence > 40) {
+            } else if (confidence >= 50) {
               fullList[index].status = 'In Progress';
             } else {
               fullList[index].status = 'Not Implemented';
@@ -46,13 +61,14 @@ class ApiService {
           }
         }
 
+        debugPrint('Analysis complete. Successfully mapped ${resultsList.length} controls.');
         return fullList;
       } else {
-        debugPrint('Server Error: ${response.statusCode}');
+        debugPrint('Server Error: ${response.statusCode} - ${response.body}');
         return null;
       }
     } catch (e) {
-      debugPrint('Analysis Error: $e');
+      debugPrint('Analysis Engine Exception: $e');
       return null;
     }
   }

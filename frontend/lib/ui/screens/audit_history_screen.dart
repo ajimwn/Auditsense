@@ -8,6 +8,7 @@ class AuditHistoryItem {
   final int controlCount;
   final int complianceScore;
   final List<AuditItem> results;
+  final String originalText; // Added to support re-analysis
 
   AuditHistoryItem({
     required this.id,
@@ -15,17 +16,20 @@ class AuditHistoryItem {
     required this.controlCount,
     required this.complianceScore,
     required this.results,
+    required this.originalText,
   });
 }
 
 class AuditHistoryScreen extends StatelessWidget {
   final List<AuditHistoryItem> history;
   final Function(List<AuditItem>) onLoadAudit;
+  final Function(String) onReanalyze; // Added re-analyze callback
 
   const AuditHistoryScreen({
     super.key,
     required this.history,
     required this.onLoadAudit,
+    required this.onReanalyze,
   });
 
   @override
@@ -131,14 +135,28 @@ class AuditHistoryScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(width: 48),
-                    ElevatedButton(
-                      onPressed: () => onLoadAudit(item.results),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00338D),
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('RE-AUDIT / UPDATE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                    Column(
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => onLoadAudit(item.results),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00338D),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('VIEW / UPDATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: () => onReanalyze(item.originalText),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            side: const BorderSide(color: Color(0xFF00338D)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('RE-ANALYZE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1, color: Color(0xFF00338D))),
+                        ),
+                      ],
                     ),
                   ],
                 ),
